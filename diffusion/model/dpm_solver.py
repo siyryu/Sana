@@ -241,7 +241,7 @@ class NoiseScheduleFlow:
         Compute lambda_t = log(alpha_t) - log(sigma_t) of a given continuous-time label t in [0, T].
         """
         log_mean_coeff = self.marginal_log_mean_coeff(t)
-        log_std = torch.log(self.marginal_std(t))
+        log_std = torch.log(self.marginal_std(t) + torch.tensor(1e-7))
         return log_mean_coeff - log_std
 
     @staticmethod
@@ -463,10 +463,13 @@ def model_wrapper(
                 [condition, condition] if guidance_scale == 1.0 else [unconditional_condition, condition, condition]
             )
 
-            try:
-                chunks = noise_pred_fn(x_in, t_in, cond=c_in).chunk(num_inputs)
-            except:
-                chunks = noise_pred_fn(x_in, t_in, cond=c_in)[0].chunk(num_inputs)
+            # try:
+            #     chunks = noise_pred_fn(x_in, t_in, cond=c_in).chunk(num_inputs)
+            # except:
+            #     chunks = noise_pred_fn(x_in, t_in, cond=c_in)[0].chunk(num_inputs)
+
+            # use try hear will cause torch.jit.trace missing error, so it's deleted
+            chunks = noise_pred_fn(x_in, t_in, cond=c_in).chunk(num_inputs)
 
             if guidance_scale == 1.0:
                 noise, noise_perturb = chunks
@@ -833,7 +836,7 @@ class DPM_Solver:
         h = lambda_t - lambda_s
         log_alpha_s, log_alpha_t = ns.marginal_log_mean_coeff(s), ns.marginal_log_mean_coeff(t)
         sigma_s, sigma_t = ns.marginal_std(s), ns.marginal_std(t)
-        alpha_t = torch.exp(log_alpha_t)
+        alpha_t = torch.exp(log_alpha_t.float())
 
         if self.algorithm_type == "dpmsolver++":
             phi_1 = torch.expm1(-h)
@@ -1097,7 +1100,7 @@ class DPM_Solver:
         )
         log_alpha_prev_0, log_alpha_t = ns.marginal_log_mean_coeff(t_prev_0), ns.marginal_log_mean_coeff(t)
         sigma_prev_0, sigma_t = ns.marginal_std(t_prev_0), ns.marginal_std(t)
-        alpha_t = torch.exp(log_alpha_t)
+        alpha_t = torch.exp(log_alpha_t.float())
 
         h_0 = lambda_prev_0 - lambda_prev_1
         h = lambda_t - lambda_prev_0

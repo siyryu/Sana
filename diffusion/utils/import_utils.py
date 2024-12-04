@@ -1,22 +1,29 @@
 import importlib.util
 import logging
 import warnings
+import os
 
 import importlib_metadata
 from packaging import version
 
 logger = logging.getLogger(__name__)
 
-_xformers_available = importlib.util.find_spec("xformers") is not None
-try:
-    if _xformers_available:
-        _xformers_version = importlib_metadata.version("xformers")
-        _torch_version = importlib_metadata.version("torch")
-        if version.Version(_torch_version) < version.Version("1.12"):
-            raise ValueError("xformers is installed but requires PyTorch >= 1.12")
-        logger.debug(f"Successfully imported xformers version {_xformers_version}")
-except importlib_metadata.PackageNotFoundError:
+# Check if xformers is disabled via environment variable
+_xformers_disabled = os.getenv("XFORMERS_DISABLED", "0").lower() in ("1", "true", "yes")
+if _xformers_disabled:
+    logger.info("xformers is disabled via environment variable XFORMERS_DISABLED")
     _xformers_available = False
+else:
+    _xformers_available = importlib.util.find_spec("xformers") is not None
+    try:
+        if _xformers_available:
+            _xformers_version = importlib_metadata.version("xformers")
+            _torch_version = importlib_metadata.version("torch")
+            if version.Version(_torch_version) < version.Version("1.12"):
+                raise ValueError("xformers is installed but requires PyTorch >= 1.12")
+            logger.debug(f"Successfully imported xformers version {_xformers_version}")
+    except importlib_metadata.PackageNotFoundError:
+        _xformers_available = False
 
 _triton_modules_available = importlib.util.find_spec("triton") is not None
 try:

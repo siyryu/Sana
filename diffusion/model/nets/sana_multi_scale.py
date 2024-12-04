@@ -311,7 +311,7 @@ class SanaMS(Sana):
 
         if mask is not None:
             mask = mask.repeat(y.shape[0] // mask.shape[0], 1) if mask.shape[0] != y.shape[0] else mask
-            mask = mask.squeeze(1).squeeze(1)
+            # mask = mask.squeeze(1).squeeze(1)
             if _xformers_available:
                 y = y.squeeze(1).masked_select(mask.unsqueeze(-1) != 0).view(1, -1, x.shape[-1])
                 y_lens = mask.sum(dim=1).tolist()
