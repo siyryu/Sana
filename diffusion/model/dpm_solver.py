@@ -379,6 +379,42 @@ def model_wrapper(
             return t_continuous
 
     def noise_pred_fn(x, t_continuous, cond=None):
+        import torch
+        import coremltools as ct
+        import numpy as np
+
+        class model_wrapper(torch.nn.Module):
+            def __init__(self, model):
+                super().__init__()
+                self.model = model.eval()
+
+            def forward(self, x, t_input, cond):
+                return self.model(x, t_input, cond, **model_kwargs)
+
+        with torch.no_grad():
+            traced_model = torch.jit.trace(
+                model_wrapper(model),
+                (x, get_model_input_time(t_continuous), cond),
+            )
+            # Define input shapes based on the traced model inputs
+        
+        print("=== model trace done ===")
+        input_shapes = {"x": x.shape, "t_input": get_model_input_time(t_continuous).shape, "cond": cond.shape}
+
+        # Convert to CoreML model
+        mlmodel = ct.convert(
+            traced_model,
+            inputs=[
+                ct.TensorType(name="x", shape=input_shapes["x"], dtype=np.float16),
+                ct.TensorType(name="t_input", shape=input_shapes["t_input"], dtype=np.float16),
+                ct.TensorType(name="cond", shape=input_shapes["cond"], dtype=np.float16),
+            ],
+            minimum_deployment_target=ct.target.iOS18,
+        )
+
+        # Save the model
+        mlmodel.save("sana_pure_model.mlpackage")
+
         t_input = get_model_input_time(t_continuous)
         if cond is None:
             output = model(x, t_input, **model_kwargs)
