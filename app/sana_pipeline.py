@@ -173,8 +173,19 @@ class SanaPipeline(nn.Module):
         if "pos_embed" in state_dict:
             del state_dict["pos_embed"]
         missing, unexpected = self.model.load_state_dict(state_dict, strict=False)
+        # 设置模型为评估模式并移动到指定设备
         self.model.eval().to(self.weight_dtype)
-
+        # 禁用所有参数的梯度
+        for param in self.model.parameters():
+            param.requires_grad_(False)
+            # 确保数据也被分离
+            if hasattr(param, 'data'):
+                param.data = param.data.detach()
+        # 如果模型有子模块，也确保它们都处于评估模式
+        for module in self.model.modules():
+            module.eval()
+            if hasattr(module, 'requires_grad_'):
+                module.requires_grad_(False)
         self.logger.info("Generating sample from ckpt: %s" % model_path)
         self.logger.warning(f"Missing keys: {missing}")
         self.logger.warning(f"Unexpected keys: {unexpected}")
