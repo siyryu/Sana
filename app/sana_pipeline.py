@@ -179,12 +179,12 @@ class SanaPipeline(nn.Module):
         for param in self.model.parameters():
             param.requires_grad_(False)
             # 确保数据也被分离
-            if hasattr(param, 'data'):
+            if hasattr(param, "data"):
                 param.data = param.data.detach()
         # 如果模型有子模块，也确保它们都处于评估模式
         for module in self.model.modules():
             module.eval()
-            if hasattr(module, 'requires_grad_'):
+            if hasattr(module, "requires_grad_"):
                 module.requires_grad_(False)
         self.logger.info("Generating sample from ckpt: %s" % model_path)
         self.logger.warning(f"Missing keys: {missing}")
@@ -312,13 +312,60 @@ class SanaPipeline(nn.Module):
                         schedule="FLOW",
                     )
                     scheduler.register_progress_bar(self.progress_fn)
-                    sample = scheduler.sample(
-                        z,
-                        steps=num_inference_steps,
-                        order=2,
-                        skip_type="time_uniform_flow",
-                        method="multistep",
-                        flow_shift=self.flow_shift,
+                    # sample = scheduler.sample(
+                    #     z,
+                    #     steps=num_inference_steps,
+                    #     order=2,
+                    #     skip_type="time_uniform_flow",
+                    #     method="multistep",
+                    #     flow_shift=self.flow_shift,
+                    # )
+
+                    # trace script here
+                    class sampler_wrapper(nn.Module):
+                        def __init__(self, scheduler):
+                            super().__init__()
+                            self.scheduler = scheduler
+
+                        def forward(self, x):
+                            return self.scheduler.sample(
+                                x.detach(),
+                                steps=num_inference_steps,
+                                order=2,
+                                skip_type="time_uniform_flow",
+                                method="multistep",
+                                flow_shift=1.0,
+                            )
+
+                    with torch.no_grad():
+                        traced_model = torch.jit.trace(
+                            sampler_wrapper(scheduler).eval(),
+                            z,
+                        )
+                    traced_model.save("/home/siyuanyu/lightsvd/outputs/sampler_sana.pt")
+                    import os
+
+                    print(
+                        f"Size of sampler_sana.pt: {os.path.getsize('/home/siyuanyu/lightsvd/outputs/sampler_sana.pt') / (1024 * 1024):.2f} MB"
+                    )
+
+                    print("===trace done, now convert to coreml===")
+                    # 打开一个文件，写入 traced_sana.graph 的内容
+                    with open("traced_sana_graph.txt", "w") as file:
+                        file.write(str(traced_model.graph))
+
+                    print("Graph saved to traced_sana_graph.txt")
+                    str(traced_model.graph)
+
+                    import coremltools as ct
+                    import numpy as np
+
+                    mlmodel = ct.convert(
+                        traced_model.cpu(),
+                        inputs=[ct.TensorType(name="input", shape=z.shape, dtype=np.float16)],
+                        minimum_deployment_target=ct.target.iOS18,
+                        convert_to="mlprogram",  # 使用新的转换后端
+                        compute_units=ct.ComputeUnit.CPU_AND_NE,
                     )
 
             sample = sample.to(self.weight_dtype)
