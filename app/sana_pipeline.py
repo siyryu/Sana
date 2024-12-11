@@ -75,6 +75,7 @@ class SanaPipeline(nn.Module):
     def __init__(
         self,
         config: Optional[str] = "configs/sana_config/1024ms/Sana_1600M_img1024.yaml",
+        device: torch.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
     ):
         super().__init__()
         config = pyrallis.load(SanaInference, open(config))
@@ -83,7 +84,7 @@ class SanaPipeline(nn.Module):
         # set some hyper-parameters
         self.image_size = self.config.model.image_size
 
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = device
         logger = get_root_logger()
         self.logger = logger
         self.progress_fn = lambda progress, desc: None
