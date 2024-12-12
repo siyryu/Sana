@@ -318,6 +318,6 @@ class SanaPipeline(nn.Module):
             sample = resize_and_crop_tensor(sample, self.ori_width, self.ori_height)
             samples.append(sample)
 
-            return sample
+            # return sample
 
-        return samples
+        return torch.cat(samples, dim=0)
